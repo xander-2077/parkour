@@ -17,10 +17,16 @@ from torch.autograd import Variable
 from rsl_rl import modules
 
 import pyrealsense2 as rs
+""" 
+ros2_numpy is a package that provides conversion between ROS messages and numpy objects:
+- arr = numpify(msg, ...) - try to get a numpy object from a message
+- msg = msgify(MessageType, arr, ...) - try and convert a numpy object to a message
+"""
 import ros2_numpy as rnp
 
 @torch.no_grad()
 def resize2d(img, size):
+    """使用 PyTorch 的自适应平均池化调整图像大小"""
     return (F.adaptive_avg_pool2d(Variable(img), size)).data
 
 class VisualHandlerNode(Node):
@@ -63,6 +69,7 @@ class VisualHandlerNode(Node):
         self.depth_range = (depth_range[0] * 1000, depth_range[1] * 1000) # [m] -> [mm]
 
     def start_pipeline(self):
+        """ 配置并启动 Realsense 摄像头的数据流 """
         self.rs_pipeline = rs.pipeline()
         self.rs_config = rs.config()
         self.rs_config.enable_stream(
@@ -112,6 +119,7 @@ class VisualHandlerNode(Node):
             ))
 
     def start_ros_handlers(self):
+        """ 设置 ROS 消息发布者，用于发布深度图, RGB 图像, Camera info 和 depth embedding """
         self.depth_input_pub = self.create_publisher(
             Image,
             self.depth_input_topic,
@@ -181,11 +189,13 @@ class VisualHandlerNode(Node):
         self.get_logger().info("ros handlers started")
 
     def publish_camera_info_callback(self):
+        """ Publish camera info """
         self.camera_info_msg.header.stamp = self.get_clock().now().to_msg()
         self.get_logger().info("camera info published", once= True)
         self.camera_info_pub.publish(self.camera_info_msg)
 
     def get_depth_frame(self):
+        """ 从摄像头获取深度帧，应用滤波器，并发布处理后的深度图 """
         # read from pyrealsense2, preprocess and write the model embedding to the buffer
         rs_frame = self.rs_pipeline.wait_for_frames(int(
             self.cfg["sensor"]["forward_camera"]["latency_range"][1] * 1000 # ms
@@ -245,6 +255,7 @@ class VisualHandlerNode(Node):
         return depth_image_pyt
     
     def publish_depth_embedding(self, embedding):
+        """ msg type: Float32MultiArray"""
         msg = Float32MultiArray()
         msg.data = embedding.squeeze().detach().cpu().numpy().tolist()
         self.forward_depth_embedding_pub.publish(msg)
@@ -254,12 +265,14 @@ class VisualHandlerNode(Node):
         self.visual_encoder = visual_encoder
 
     def start_main_loop_timer(self, duration):
+        """ Start the main loop timer when using the timer mode """
         self.create_timer(
             duration,
             self.main_loop,
         )
 
     def main_loop(self):
+        """ Get depth image, process it with visual encoder and publish the embedding """
         depth_image_pyt = self.get_depth_frame()
         if depth_image_pyt is not None:
             embedding = self.visual_encoder(depth_image_pyt)
@@ -278,6 +291,7 @@ def main(args):
     device = "cpu"
     duration = config_dict["sensor"]["forward_camera"]["refresh_duration"] # in sec
 
+    # Visual node 
     visual_node = VisualHandlerNode(
         cfg= json.load(open(osp.join(args.logdir, "config.json"), "r")),
         cropping= [args.crop_top, args.crop_bottom, args.crop_left, args.crop_right],
@@ -286,6 +300,7 @@ def main(args):
         enable_rgb= args.rgb,
     )
 
+    # env node
     env_node = UnitreeRos2Real(
         "visual_h1",
         low_cmd_topic= "low_cmd_dryrun", # This node should not publish any command at all
@@ -310,10 +325,11 @@ def main(args):
     model.load_state_dict(state_dict["model_state_dict"])
     model.to(device)
     model = model.encoders[0] # the first encoder is the visual encoder
-    env_node.destroy_node()
+    env_node.destroy_node()  # env_node is not needed anymore
 
     visual_node.get_logger().info("Embedding send duration: {:.2f} sec".format(duration))
     visual_node.register_models(model)
+    
     if args.loop_mode == "while":
         rclpy.spin_once(visual_node, timeout_sec= 0.)
         while rclpy.ok():
