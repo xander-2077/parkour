@@ -16,6 +16,7 @@ from torch.autograd import Variable
 from rsl_rl import modules
 
 class ZeroActModel(torch.nn.Module):
+    """用于生成零动作（可能用于安全模式或初始化），站立"""
     def __init__(self, angle_tolerance= 0.15, delta= 0.2):
         super().__init__()
         self.angle_tolerance = angle_tolerance
@@ -34,6 +35,10 @@ class Go2Node(UnitreeRos2Real):
         super().__init__(*args, robot_class_name= "Go2", **kwargs)
 
     def register_models(self, stand_model, task_model, task_policy):
+        """
+        ZeroActModel as stand model
+        task_policy: function, task_model.memory_a, task_model.actor
+        """
         self.stand_model = stand_model
         self.task_model = task_model
 
@@ -90,6 +95,7 @@ def main(args):
     duration = config_dict["sim"]["dt"] * config_dict["control"]["decimation"] # in sec
     device = "cuda"
 
+    # env
     env_node = Go2Node(
         "go2",
         # low_cmd_topic= "low_cmd_dryrun", # for the dryrun safety
@@ -99,6 +105,7 @@ def main(args):
         dryrun= not args.nodryrun,
     )
 
+    # model
     model = getattr(modules, config_dict["runner"]["policy_class_name"])(
         num_actor_obs = env_node.num_obs,
         num_critic_obs = env_node.num_privileged_obs,
@@ -115,11 +122,11 @@ def main(args):
     model.eval()
     model.to(device)
 
+    # log
     env_node.get_logger().info("Model loaded from: {}".format(osp.join(args.logdir, model_names[-1])))
     env_node.get_logger().info("Control Duration: {} sec".format(duration))
     env_node.get_logger().info("Motor Stiffness (kp): {}".format(env_node.p_gains))
     env_node.get_logger().info("Motor Damping (kd): {}".format(env_node.d_gains))
-
 
     # zero_act_model to start the safe standing
     zero_act_model = ZeroActModel()
@@ -128,11 +135,14 @@ def main(args):
     # magically modify the model to use the components other than the forward depth encoders
     memory_a = model.memory_a
     mlp = model.actor
+    
+    # policy
     @torch.jit.script
     def policy(obs: torch.Tensor):
         rnn_embedding = memory_a(obs)
         action = mlp(rnn_embedding)
         return action
+    
     if hasattr(model, "replace_state_prob"):
         # the case where lin_vel is estimated by the state estimator
         memory_s = model.memory_s
@@ -151,6 +161,7 @@ def main(args):
         model,
         policy,
     )
+    
     env_node.start_ros_handlers()
     if args.loop_mode == "while":
         rclpy.spin_once(env_node, timeout_sec= 0.)
@@ -169,6 +180,9 @@ def main(args):
 
 
 if __name__ == "__main__":
+    """
+    This script is used for loading the trained model and run the policy.
+    """
     import argparse
     parser = argparse.ArgumentParser()
     

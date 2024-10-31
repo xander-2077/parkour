@@ -57,3 +57,6 @@ runs
 # other
 *.egg-info
 __pycache__
+
+.history
+go1_ckpts/Nov02_16-18-16_674k_distill_crawljumpjumpleap_vDelay0.25-0.30_camPitch0.52_depthMax2.0_jumpNov02_11-07-49_leapVel1.5_jumpOffset0.05_oracleResetWhenSkill_fricMax2.0_noTanh_fromOct28_16-16-58
