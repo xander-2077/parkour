@@ -46,6 +46,7 @@ def quat_from_euler_xyz(roll, pitch, yaw):
 
 @torch.jit.script
 def quat_rotate_inverse(q, v):
+    # 使用四元数逆旋转向量
     """ q must be in x, y, z, w order """
     shape = q.shape
     q_w = q[:, -1]
@@ -161,7 +162,7 @@ class UnitreeRos2Real(Node):
             joy_stick_topic= "/wirelesscontroller",
             forward_depth_topic= None, # if None and still need access, set to str "pyrealsense"
             forward_depth_embedding_topic= "/forward_depth_embedding",
-            cfg= dict(),
+            cfg= dict(),   # come from config.json
             lin_vel_deadband= 0.1,
             ang_vel_deadband= 0.1,
             cmd_px_range= [0.4, 1.0], # check joy_stick_callback (p for positive, n for negative)
@@ -171,10 +172,10 @@ class UnitreeRos2Real(Node):
             cmd_pyaw_range= [0.4, 1.6], # check joy_stick_callback (p for positive, n for negative)
             cmd_nyaw_range= [0.4, 1.6], # check joy_stick_callback (p for positive, n for negative)
             replace_obs_with_embeddings= [], # a list of strings, e.g. ["forward_depth"] then the corrseponding obs will be processed by _get_forward_depth_embedding_obs()
-            move_by_wireless_remote= True, # if True, the robot will be controlled by a wireless remote
+            move_by_wireless_remote= True, # TODO: if True, the robot will be controlled by a wireless remote
             model_device= "cpu",
             dof_pos_protect_ratio= 1.1, # if the dof_pos is out of the range of this ratio, the process will shutdown.
-            robot_class_name= "H1",
+            robot_class_name= "Go2",
             dryrun= True, # if True, the robot will not send commands to the real robot
         ):
         super().__init__("unitree_ros2_real")
