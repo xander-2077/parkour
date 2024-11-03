@@ -179,12 +179,12 @@ class UnitreeRos2Real(Node):
             dryrun= True, # if True, the robot will not send commands to the real robot
         ):
         super().__init__("unitree_ros2_real")
-        self.NUM_DOF = getattr(RobotCfgs, robot_class_name).NUM_DOF
-        self.NUM_ACTIONS = getattr(RobotCfgs, robot_class_name).NUM_ACTIONS
+        self.NUM_DOF = getattr(RobotCfgs, robot_class_name).NUM_DOF # 12
+        self.NUM_ACTIONS = getattr(RobotCfgs, robot_class_name).NUM_ACTIONS # 12 
         self.robot_namespace = robot_namespace
         self.low_state_topic = low_state_topic
         # Generate a unique cmd topic so that the low_cmd will not send to the robot's motor.
-        self.low_cmd_topic = low_cmd_topic if not dryrun else low_cmd_topic + "_dryrun_" + str(np.random.randint(0, 65535))
+        self.low_cmd_topic = low_cmd_topic if not dryrun else low_cmd_topic + "_dryrun_" + str(np.random.randint(0, 65535))  # for the dryrun safety
         self.joy_stick_topic = joy_stick_topic
         self.forward_depth_topic = forward_depth_topic
         self.forward_depth_embedding_topic = forward_depth_embedding_topic
@@ -213,6 +213,7 @@ class UnitreeRos2Real(Node):
 
     def parse_config(self):
         """ parse, set attributes from config dict, initialize buffers to speed up the computation """
+        # set gravity vector
         self.up_axis_idx = 2 # 2 for z, 1 for y -> adapt gravity accordingly
         self.gravity_vec = torch.zeros((1, 3), device= self.model_device, dtype= torch.float32)
         self.gravity_vec[:, self.up_axis_idx] = -1
